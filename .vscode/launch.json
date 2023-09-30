@@ -9,7 +9,7 @@
             "request": "launch",
             "name": "Debug",
             "program": "${workspaceFolder}/zig-out/bin/zig_tree",
-            "args": [],
+            "args": ["/home/littleboy/Documents/Zig/zig_tree/words_test.txt", "tester"],
             "cwd": "${workspaceFolder}"
         }
     ]
