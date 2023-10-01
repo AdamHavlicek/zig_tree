@@ -11,6 +11,14 @@
             "program": "${workspaceFolder}/zig-out/bin/zig_tree",
             "args": ["/home/littleboy/Documents/Zig/zig_tree/words_test.txt", "tester"],
             "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug Test",
+            "program": "${workspaceFolder}/zig-out/bin/test",
+            "args": [],
+            "cwd": "${workspaceFolder}"
         }
     ]
 }

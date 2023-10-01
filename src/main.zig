@@ -8,19 +8,18 @@ pub fn Root(comptime T: type) type {
 
         const ChildrenType = std.AutoHashMap(T, Node);
 
-        allocator: std.mem.Allocator,
+        allocator: *std.mem.Allocator,
         children: *ChildrenType,
 
         const Node = struct {
-            allocator: std.mem.Allocator,
+            allocator: *std.mem.Allocator,
             data: T,
             end_of_word: bool,
             children: *ChildrenType,
 
-            fn init(allocator: std.mem.Allocator) !Node {
+            fn init(allocator: *std.mem.Allocator) !Node {
                 var children = try allocator.create(ChildrenType);
-                children.* = ChildrenType.init(allocator);
-
+                children.* = ChildrenType.init(allocator.*);
                 return .{
                     .allocator = allocator,
                     .end_of_word = false,
@@ -29,19 +28,39 @@ pub fn Root(comptime T: type) type {
                 };
             }
 
+            pub fn deinit(self: *Node) void {
+                var it = self.children.valueIterator();
+                while (it.next()) |value| {
+                    value.*.deinit();
+                }
+
+                self.children.*.deinit();
+                self.allocator.destroy(self.children);
+            }
+
             fn set_end_of_word(self: *Node) void {
                 self.end_of_word = true;
             }
         };
 
-        pub fn init(allocator: std.mem.Allocator) !Self {
+        pub fn init(allocator: *std.mem.Allocator) !Self {
             var children = try allocator.create(ChildrenType);
-            children.* = ChildrenType.init(allocator);
-
+            children.* = ChildrenType.init(allocator.*);
             return .{
                 .allocator = allocator,
                 .children = children,
             };
+        }
+
+        // Destructor to free allocated memory
+        pub fn deinit(self: *Self) void {
+            var it = self.children.valueIterator();
+            while (it.next()) |value| {
+                value.*.deinit();
+            }
+
+            self.children.*.deinit();
+            self.allocator.destroy(self.children);
         }
 
         pub fn add_word(self: *Self, value: Slice) !void {
@@ -50,10 +69,12 @@ pub fn Root(comptime T: type) type {
                 var children = if (last_child) |node| node.children else self.children;
 
                 if (!children.contains(char)) {
-                    var new_child = try Node.init(children.allocator);
+                    var new_child = try Node.init(self.allocator);
                     new_child.data = char;
 
-                    try children.put(char, new_child);
+                    children.put(char, new_child) catch |err| {
+                        std.log.err("{}", .{err});
+                    };
                 }
 
                 last_child = children.getPtr(char);
@@ -82,10 +103,6 @@ pub fn Root(comptime T: type) type {
                 return false;
             }
         }
-
-        pub fn deinit(self: *Root) void {
-            _ = self;
-        }
     };
 }
 
@@ -103,6 +120,8 @@ pub fn loadWords(allocator: std.mem.Allocator, path: []const u8, root: *CharRoot
     while (try in_stream.readUntilDelimiterOrEof(&buf, '\n')) |line| {
         try root.add_word(line);
     }
+
+    std.debug.print("Loading completed!\n", .{});
 }
 
 pub fn main() !void {
@@ -119,9 +138,23 @@ pub fn main() !void {
     const word = args[2];
 
     var root = try CharRoot.init(allocator);
+    defer root.deinit();
+
     try loadWords(allocator, path, &root);
 
-    std.debug.print("{}\n", .{root.exists(word)});
+    std.debug.print("Word[{s}] - {}\n", .{ word, root.exists(word) });
 }
 
-test "[Root] - [Node]" {}
+test "[Root] - [Node]" {
+    const word = "TESTER";
+    const word1 = "TEST";
+    var allocator = std.testing.allocator;
+
+    var root = try CharRoot.init(&allocator);
+    defer root.deinit();
+
+    try root.add_word(word);
+    try root.add_word(word1);
+
+    try std.testing.expect(root.exists(word1));
+}
